@@ -2,24 +2,20 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Impact Radius Contract Comparator</title>
+    <title>Contract Comparator</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Impact Radius Contract Comparator</h1>
-    <div class="upload-section">
-        <label>
-            Contract 1 (PDF):
-            <input type="file" id="pdf1" accept="application/pdf">
-        </label>
-        <label>
-            Contract 2 (PDF):
-            <input type="file" id="pdf2" accept="application/pdf">
-        </label>
-        <button id="compareBtn">Compare</button>
+    <h1>Contract Comparator</h1>
+    <div>
+        <label>Old Contract (PDF): <input type="file" id="oldContract" accept="application/pdf"></label>
+        <label>New Contract (PDF): <input type="file" id="newContract" accept="application/pdf"></label>
+        <button id="compareButton">Compare</button>
     </div>
-    <div id="result"></div>
-    <!-- PDF.js v2.16.105 UMD build from Cloudflare CDN -->
+    <div id="loadingBar" style="display:none;">
+        <div class="loading-progress" style="height:8px;background:#e67300;width:0%;transition:width 0.2s;"></div>
+    </div>
+    <div id="results"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
       pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
