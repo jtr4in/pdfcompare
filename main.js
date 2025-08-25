@@ -6,61 +6,84 @@ async function extractTextFromPDF(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        fullText += content.items.map(item => item.str).join(" ");
+        // Each item.str is a text fragment; join with space, then add newline at end of page for best results
+        fullText += content.items.map(item => item.str).join(" ") + "\n";
     }
     return fullText;
 }
 
-// Basic contract diff for demo purposes
-function compareText(oldText, newText) {
-    const linesOld = oldText.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
-    const linesNew = newText.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
+// Compare line by line and return only changed lines
+function compareContractsLineByLine(oldText, newText) {
+    // Split into lines and trim whitespace
+    const oldLines = oldText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const newLines = newText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
+    const maxLines = Math.max(oldLines.length, newLines.length);
     let changes = [];
-    let changedCount = 0;
 
-    // Naive line-by-line comparison
-    for (let i = 0; i < Math.max(linesOld.length, linesNew.length); i++) {
-        const oldLine = linesOld[i] || '';
-        const newLine = linesNew[i] || '';
-        let changeType = 'No change';
+    for (let i = 0; i < maxLines; i++) {
+        const oldLine = oldLines[i] || '';
+        const newLine = newLines[i] || '';
         if (oldLine !== newLine) {
-            changeType = 'Changed';
-            changedCount++;
+            // Try to highlight the exact changed substring
+            let changeDescription = "";
+            // If both have a monetary value, highlight that difference
+            const oldAmount = oldLine.match(/US\$[0-9\.,]+/);
+            const newAmount = newLine.match(/US\$[0-9\.,]+/);
+            if (oldAmount && newAmount && oldAmount[0] !== newAmount[0]) {
+                changeDescription = `Amount changed from <b>${oldAmount[0]}</b> to <b>${newAmount[0]}</b>`;
+            } else {
+                changeDescription = "Line changed";
+            }
+            changes.push({
+                aspect: `Line ${i+1}`,
+                oldValue: oldLine,
+                newValue: newLine,
+                change: changeDescription
+            });
         }
-        changes.push({
-            aspect: `Line ${i+1}`,
-            oldValue: oldLine,
-            newValue: newLine,
-            change: changeType
-        });
     }
+    return changes;
+}
 
-    // Summary
-    let summary = changedCount === 0
-        ? "No changes found."
-        : `${changedCount} lines changed.`;
-
-    return {
-        summary,
-        significantChanges: changes.filter(c => c.change === 'Changed').map(c => `Line ${c.aspect}: "${c.oldValue}" → "${c.newValue}"`),
-        minorChanges: [],
-        basicInformation: changes.slice(0, 10), // first 10 lines for demo
-        keyTerms: changes.slice(10, 20), // next 10 lines for demo
-        payoutChanges: [],
-        questions: changedCount > 0 ? ["Review all highlighted lines for contract impact."] : []
-    };
+// Display only changed lines in a table
+function displayLineByLineChanges(changes) {
+    const resultsArea = document.getElementById('results');
+    if (changes.length === 0) {
+        resultsArea.innerHTML = "<p>No differences found!</p>";
+        return;
+    }
+    let html = `
+        <h3>Line-by-Line Changes</h3>
+        <table class="comparison-table">
+            <tr>
+                <th>Aspect</th>
+                <th>Old Contract</th>
+                <th>New Contract</th>
+                <th>Change</th>
+            </tr>
+            ${changes.map(row => `
+                <tr>
+                    <td>${row.aspect}</td>
+                    <td>${row.oldValue}</td>
+                    <td class="highlight">${row.newValue}</td>
+                    <td>${row.change}</td>
+                </tr>
+            `).join('')}
+        </table>
+    `;
+    resultsArea.innerHTML = html;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const compareButton = document.getElementById('compareButton');
-    const resultsArea = document.getElementById('results');
     const loadingBar = document.getElementById('loadingBar');
     const loadingProgress = loadingBar.querySelector('.loading-progress');
 
     compareButton.addEventListener('click', async () => {
         const oldFile = document.getElementById('oldContract').files[0];
         const newFile = document.getElementById('newContract').files[0];
+        const resultsArea = document.getElementById('results');
 
         if (!oldFile || !newFile) {
             resultsArea.innerHTML = "<p>Please select both contracts to compare.</p>";
@@ -86,8 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingProgress.style.width = '100%';
 
             setTimeout(() => {
-                const comparison = compareText(oldText, newText);
-                displayResults(comparison);
+                const changes = compareContractsLineByLine(oldText, newText);
+                displayLineByLineChanges(changes);
                 loadingBar.style.display = 'none';
             }, 500);
 
@@ -100,47 +123,4 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
     });
-
-    function displayResults(comparison) {
-        resultsArea.innerHTML = `
-            <h3>Summary of Changes</h3>
-            <p>${comparison.summary}</p>
-            <h4>Significant Changes:</h4>
-            <ul>${comparison.significantChanges.map(change => `<li>${change}</li>`).join('')}</ul>
-            <h4>Minor Changes:</h4>
-            <ul>${comparison.minorChanges.map(change => `<li>${change}</li>`).join('')}</ul>
-            <h3>Basic Information Changes</h3>
-            <table class="comparison-table">
-                <tr>
-                    <th>Aspect</th><th>Old Contract</th><th>New Contract</th><th>Change</th>
-                </tr>
-                ${comparison.basicInformation.map(info => `
-                    <tr>
-                        <td>${info.aspect}</td>
-                        <td>${info.oldValue}</td>
-                        <td class="${info.oldValue !== info.newValue ? 'highlight' : ''}">${info.newValue}</td>
-                        <td>${info.change}</td>
-                    </tr>
-                `).join('')}
-            </table>
-            <h3>Key Terms Changes</h3>
-            <table class="comparison-table">
-                <tr>
-                    <th>Aspect</th><th>Old Contract</th><th>New Contract</th><th>Change</th>
-                </tr>
-                ${comparison.keyTerms.map(term => `
-                    <tr>
-                        <td>${term.aspect}</td>
-                        <td>${term.oldValue}</td>
-                        <td class="${term.oldValue !== term.newValue ? 'highlight' : ''}">${term.newValue}</td>
-                        <td>${term.change}</td>
-                    </tr>
-                `).join('')}
-            </table>
-            ${comparison.questions.length > 0 ? `
-                <h3>Questions for Clarification</h3>
-                <ul>${comparison.questions.map(q => `<li>${q}</li>`).join('')}</ul>
-            ` : ''}
-        `;
-    }
 });
