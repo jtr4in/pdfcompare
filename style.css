@@ -1,0 +1,48 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 2em;
+    background: #f7f7f7;
+}
+h1 {
+    color: #e67300;
+}
+.upload-section {
+    margin-bottom: 1em;
+    background: #fff;
+    padding: 1em;
+    border-radius: 8px;
+    box-shadow: 0 0 10px #ddd;
+}
+label {
+    display: block;
+    margin-bottom: .5em;
+}
+button {
+    padding: .5em 1em;
+    background: #e67300;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#result {
+    margin-top: 2em;
+    background: #fff;
+    padding: 1em;
+    border-radius: 8px;
+    box-shadow: 0 0 10px #ddd;
+}
+.diff-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.diff-table th, .diff-table td {
+    border: 1px solid #ccc;
+    padding: .5em;
+}
+.diff-table th {
+    background: #ffe5cc;
+}
+.diff-different {
+    background: #ffdddd;
+}
