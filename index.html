@@ -19,7 +19,13 @@
         <button id="compareBtn">Compare</button>
     </div>
     <div id="result"></div>
+    <!-- PDF.js library (core) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <!-- PDF.js worker setup -->
+    <script>
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+    </script>
+    <!-- Your main JS logic -->
     <script src="main.js"></script>
 </body>
 </html>
