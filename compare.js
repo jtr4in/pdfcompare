@@ -37,8 +37,58 @@ document.addEventListener('DOMContentLoaded', () => {
         const oldData = parseContract(oldText);
         const newData = parseContract(newText);
 
-        // --- STEP 2: Compare parsed data ---
-        // Basic Information
+        // --- STEP 2: Compare payout groups by keys ---
+        const payoutSections = ["Free Trial", "Online Sale"];
+        const payoutChanges = [];
+
+        payoutSections.forEach(section => {
+            const oldGroups = oldData[section + "_Groups"] || [];
+            const newGroups = newData[section + "_Groups"] || [];
+
+            // Build a map from condition key to payout group for easy matching
+            const groupKey = g =>
+                [
+                    g["Customer Status"] || "",
+                    g["Referral SharedId"] || "",
+                    g["Item Category"] || "",
+                    g["Currency"] || "",
+                    g["Condition"] || ""
+                ].filter(Boolean).join('|');
+
+            const oldMap = Object.fromEntries(oldGroups.map(g => [groupKey(g), g]));
+            const newMap = Object.fromEntries(newGroups.map(g => [groupKey(g), g]));
+
+            // Find all unique keys
+            const allKeys = new Set([...Object.keys(oldMap), ...Object.keys(newMap)]);
+
+            allKeys.forEach(key => {
+                const oldG = oldMap[key] || {};
+                const newG = newMap[key] || {};
+
+                const oldPayout = oldG.Payout || "";
+                const newPayout = newG.Payout || "";
+
+                if (oldPayout !== newPayout) {
+                    let payoutDiff = "";
+                    // Try to extract numbers for $ diff
+                    const oldVal = extractValue(oldPayout);
+                    const newVal = extractValue(newPayout);
+                    if (oldVal !== null && newVal !== null && oldVal !== newVal) {
+                        const diff = newVal - oldVal;
+                        payoutDiff = `(${diff > 0 ? "+" : ""}$${diff.toFixed(2)} change)`;
+                    }
+                    payoutChanges.push({
+                        section,
+                        condition: key.replace(/\|/g, ", "),
+                        oldValue: oldPayout,
+                        newValue: newPayout,
+                        change: `Changed from ${oldPayout || 'none'} to ${newPayout || 'none'} ${payoutDiff}`
+                    });
+                }
+            });
+        });
+
+        // Basic Information (unchanged, but you can extend as needed)
         const aspects = [
             "Registration",
             "Action Locking",
@@ -55,52 +105,16 @@ document.addEventListener('DOMContentLoaded', () => {
             change: (oldData[aspect] || '') !== (newData[aspect] || '') ? "Changed" : "No change"
         }));
 
-        // Key Terms (e.g., Free Trial, Online Sale payout groups)
+        // Key Terms (optional; can be expanded for more fields)
         const keyTerms = [];
-        ["Free Trial", "Online Sale"].forEach(section => {
-            const oldGroups = oldData[section + "_Groups"] || [];
-            const newGroups = newData[section + "_Groups"] || [];
-            // Compare each group by rank and condition
-            for (let i = 0; i < Math.max(oldGroups.length, newGroups.length); i++) {
-                const oldG = oldGroups[i] || {};
-                const newG = newGroups[i] || {};
-                keyTerms.push({
-                    aspect: section + " Group " + (i + 1),
-                    oldValue: formatGroup(oldG),
-                    newValue: formatGroup(newG),
-                    change: JSON.stringify(oldG) !== JSON.stringify(newG) ? "Changed" : "No change"
-                });
-            }
-        });
 
-        // Payouts
-        const payoutChanges = [];
-        // Compare payout groups for Free Trial and Online Sale
-        ["Free Trial", "Online Sale"].forEach(section => {
-            const oldGroups = oldData[section + "_Groups"] || [];
-            const newGroups = newData[section + "_Groups"] || [];
-            for (let i = 0; i < Math.max(oldGroups.length, newGroups.length); i++) {
-                const oldG = oldGroups[i] || {};
-                const newG = newGroups[i] || {};
-                const condition = (oldG.Condition || newG.Condition || '') + (oldG["Referral SharedId"] ? ` (SharedId ${oldG["Referral SharedId"]})` : '');
-                if ((oldG.Payout || '') !== (newG.Payout || '')) {
-                    payoutChanges.push({
-                        condition,
-                        oldValue: oldG.Payout || '',
-                        newValue: newG.Payout || '',
-                        change: `Changed from ${oldG.Payout || 'none'} to ${newG.Payout || 'none'}`
-                    });
-                }
-            }
-        });
+        // Build summary
+        const summary = `Found ${payoutChanges.length} payout changes (matched by key conditions).`;
+        const significantChanges = payoutChanges.map(
+            p => `${p.section}: ${p.condition}: ${p.oldValue} → ${p.newValue} ${p.change}`
+        );
 
-        // Find summary and questions
-        const summary = `Compared contracts. Found ${basicInformation.filter(i=>i.change==="Changed").length} basic changes, ${keyTerms.filter(i=>i.change==="Changed").length} key term changes, and ${payoutChanges.length} payout changes.`;
-        const significantChanges = payoutChanges.map(p => `${p.condition}: ${p.change}`);
         const minorChanges = basicInformation.filter(i=>i.change==="Changed").map(i => `${i.aspect}: ${i.oldValue} → ${i.newValue}`);
-
-        // Questions (stub for future extension)
-        const questions = [];
 
         return {
             summary,
@@ -109,8 +123,14 @@ document.addEventListener('DOMContentLoaded', () => {
             basicInformation,
             keyTerms,
             payoutChanges,
-            questions
+            questions: []
         };
+    }
+
+    function extractValue(payoutStr) {
+        // Extract numeric dollar value from strings like "US$18.00 per order"
+        const match = payoutStr.match(/US\$([\d,.]+)/);
+        return match ? parseFloat(match[1].replace(/,/g, '')) : null;
     }
 
     // Parses contract text into a JS object with major aspects and payout groups
@@ -120,12 +140,21 @@ document.addEventListener('DOMContentLoaded', () => {
         let section = '';
         let payoutGroups = [];
         let currentGroup = {};
+        let inPayoutGroups = false;
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             // Find major sections
-            if (line.startsWith("Free Trial:")) section = "Free Trial";
-            if (line.startsWith("Online Sale:")) section = "Online Sale";
+            if (line.startsWith("Free Trial:")) {
+                section = "Free Trial";
+                payoutGroups = [];
+                inPayoutGroups = false;
+            }
+            if (line.startsWith("Online Sale:")) {
+                section = "Online Sale";
+                payoutGroups = [];
+                inPayoutGroups = false;
+            }
             if (line.startsWith("Registration:")) data["Registration"] = line.split(':')[1].trim();
             if (line.startsWith("Action Locking")) data["Action Locking"] = line;
             if (line.startsWith("Invoicing")) data["Invoicing"] = line;
@@ -136,42 +165,51 @@ document.addEventListener('DOMContentLoaded', () => {
             // Parse payout groups
             if (line === "Payout Groups") {
                 payoutGroups = [];
-                section = section || "General";
+                inPayoutGroups = true;
                 continue;
             }
-            if (/^\d+$/.test(line)) {
-                currentGroup = {};
+            if (inPayoutGroups && (/^\d+$/.test(line) || line === "All Other")) {
+                // Save previous group if exists
+                if (Object.keys(currentGroup).length > 0) {
+                    payoutGroups.push(currentGroup);
+                    currentGroup = {};
+                }
+                if (line === "All Other") {
+                    currentGroup = { Condition: "All Other" };
+                }
                 continue;
             }
-            if (line.startsWith("Customer Status")) currentGroup["Condition"] = line;
-            if (line.startsWith("Referral SharedId")) currentGroup["Referral SharedId"] = line.split(' ')[3];
-            if (line.startsWith("Item Category")) currentGroup["Condition"] = (currentGroup["Condition"] || "") + ", " + line;
-            if (/^\US\$/.test(line) || /^\d+%/.test(line) || line.includes('per order') || line.includes('sale amount')) {
-                currentGroup["Payout"] = line;
+            if (inPayoutGroups) {
+                if (line.startsWith("Customer Status")) currentGroup["Customer Status"] = line.split('is ')[1];
+                if (line.startsWith("Referral SharedId")) currentGroup["Referral SharedId"] = line.split('is ')[1];
+                if (line.startsWith("Item Category")) currentGroup["Item Category"] = line.split('is ')[1];
+                if (line.startsWith("Currency is")) currentGroup["Currency"] = line.split('is ')[1];
+                if (/^US\$[\d,.]+/.test(line) || /^\d+%/.test(line) || line.includes('per order') || line.includes('sale amount')) {
+                    currentGroup["Payout"] = line;
+                }
+                // End of a group: if next line is blank or next group starts
+                if (i+1 >= lines.length || /^\d+$/.test(lines[i+1]) || lines[i+1] === "All Other" || lines[i+1] === "Schedule") {
+                    if (Object.keys(currentGroup).length > 0) {
+                        payoutGroups.push(currentGroup);
+                        currentGroup = {};
+                    }
+                }
             }
-            if (Object.keys(currentGroup).length > 0 && line === "") {
-                payoutGroups.push(currentGroup);
-                currentGroup = {};
-            }
-            if (line === "All Other") {
-                currentGroup = { Condition: "All Other" };
-                continue;
+            // End of payout groups section
+            if (inPayoutGroups && line === "Schedule") {
+                inPayoutGroups = false;
+                if (section && payoutGroups.length > 0) data[section + "_Groups"] = payoutGroups;
+                payoutGroups = [];
             }
         }
         // Push last group if exists
-        if (Object.keys(currentGroup).length > 0) payoutGroups.push(currentGroup);
-
-        // Attach payout groups to section
+        if (inPayoutGroups && Object.keys(currentGroup).length > 0) payoutGroups.push(currentGroup);
         if (section && payoutGroups.length > 0) data[section + "_Groups"] = payoutGroups;
 
         return data;
     }
 
-    function formatGroup(group) {
-        return Object.entries(group).map(([k,v]) => `${k}: ${v}`).join(", ");
-    }
-
-    // Renders results as HTML (adapted from your example)
+    // Renders results as HTML
     function displayResults(comparison) {
         resultsArea.innerHTML = `
             <h3>Summary of Changes</h3>
@@ -199,27 +237,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                 `).join('')}
             </table>
-            <h3>Key Terms Changes</h3>
-            <table class="comparison-table">
-                <tr>
-                    <th>Aspect</th>
-                    <th>Old Contract</th>
-                    <th>New Contract</th>
-                    <th>Change</th>
-                </tr>
-                ${comparison.keyTerms.map(term => `
-                    <tr>
-                        <td>${term.aspect}</td>
-                        <td>${term.oldValue}</td>
-                        <td class="${term.change === 'Changed' ? 'highlight' : ''}">${term.newValue}</td>
-                        <td>${term.change}</td>
-                    </tr>
-                `).join('')}
-            </table>
             ${comparison.payoutChanges.length > 0 ? `
                 <h3>Payout Changes</h3>
                 <table class="comparison-table">
                     <tr>
+                        <th>Section</th>
                         <th>Condition</th>
                         <th>Old Payout</th>
                         <th>New Payout</th>
@@ -227,6 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                     ${comparison.payoutChanges.map(change => `
                         <tr>
+                            <td>${change.section}</td>
                             <td>${change.condition}</td>
                             <td>${change.oldValue}</td>
                             <td class="highlight">${change.newValue}</td>
@@ -234,12 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </tr>
                     `).join('')}
                 </table>
-            ` : ''}
-            ${comparison.questions.length > 0 ? `
-                <h3>Questions for Clarification</h3>
-                <ul>
-                    ${comparison.questions.map(q => `<li>${q}</li>`).join('')}
-                </ul>
             ` : ''}
         `;
     }
