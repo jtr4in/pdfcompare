@@ -2,24 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Contract Comparator</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Contract Comparison Tool</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Contract Comparator</h1>
-    <div>
-        <label>Old Contract (PDF): <input type="file" id="oldContract" accept="application/pdf"></label>
-        <label>New Contract (PDF): <input type="file" id="newContract" accept="application/pdf"></label>
-        <button id="compareButton">Compare</button>
+    <h1>Contract Comparison Tool</h1>
+    <div class="input-area">
+        <div>
+            <h2>Old Contract</h2>
+            <textarea id="oldContract" rows="18" placeholder="Paste old contract data here"></textarea>
+        </div>
+        <div>
+            <h2>New Contract</h2>
+            <textarea id="newContract" rows="18" placeholder="Paste new contract data here"></textarea>
+        </div>
     </div>
+    <button id="compareButton">Compare</button>
     <div id="loadingBar" style="display:none;">
-        <div class="loading-progress" style="height:8px;background:#e67300;width:0%;transition:width 0.2s;"></div>
+        <div class="loading-progress"></div>
     </div>
     <div id="results"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <script>
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
-    </script>
-    <script src="main.js"></script>
+    <footer>
+        <p>GitHub Pages ready. All processing is local in your browser.</p>
+    </footer>
+    <script src="compare.js"></script>
 </body>
 </html>
