@@ -102,16 +102,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const keyTerms = [];
 
         const summary = `Found <span class="highlight">${payoutChanges.length}</span> payout changes <span style="font-weight:normal;">(matched by key conditions).</span>`;
-        const significantChanges = payoutChanges.map(
-            p => `<span class="highlight">${p.section}</span>: <span>${p.condition}</span>: <span class="highlight">${p.oldValue} → ${p.newValue}</span> <span style="color:#22863a;">${p.change}</span>`
-        );
 
-        const minorChanges = basicInformation.filter(i=>i.change==="Changed").map(i => `<span class="highlight">${i.aspect}</span>: <span>${i.oldValue}</span> → <span class="highlight">${i.newValue}</span>`);
-
+        // For table rendering, significantChanges is just payoutChanges
         return {
             summary,
-            significantChanges,
-            minorChanges,
+            significantChanges: payoutChanges,
+            minorChanges: basicInformation.filter(i=>i.change==="Changed").map(i => `<span class="highlight">${i.aspect}</span>: <span>${i.oldValue}</span> → <span class="highlight">${i.newValue}</span>`),
             basicInformation,
             keyTerms,
             payoutChanges,
@@ -193,14 +189,41 @@ document.addEventListener('DOMContentLoaded', () => {
         return data;
     }
 
+    // Significant changes table rendering
+    function renderSignificantChangesTable(changes) {
+        if (!changes.length) return "<p>No significant changes.</p>";
+        return `
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Section</th>
+                        <th>Condition</th>
+                        <th>Old Payout</th>
+                        <th>New Payout</th>
+                        <th>Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                ${changes.map(change => `
+                    <tr>
+                        <td>${change.section}</td>
+                        <td>${change.condition}</td>
+                        <td>${change.oldValue}</td>
+                        <td class="highlight">${change.newValue}</td>
+                        <td class="highlight">${change.change}</td>
+                    </tr>
+                `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
     function displayResults(comparison) {
         resultsArea.innerHTML = `
             <h3>Summary of Changes</h3>
             <p>${comparison.summary}</p>
             <h4>Significant Changes:</h4>
-            <ul>
-                ${comparison.significantChanges.map(change => `<li>${change}</li>`).join('')}
-            </ul>
+            ${renderSignificantChangesTable(comparison.significantChanges)}
             <h4>Minor Changes:</h4>
             <ul>
                 ${comparison.minorChanges.map(change => `<li>${change}</li>`).join('')}
@@ -220,27 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                 `).join('')}
             </table>
-            ${comparison.payoutChanges.length > 0 ? `
-                <h3>Payout Changes</h3>
-                <table class="comparison-table">
-                    <tr>
-                        <th>Section</th>
-                        <th>Condition</th>
-                        <th>Old Payout</th>
-                        <th>New Payout</th>
-                        <th>Change</th>
-                    </tr>
-                    ${comparison.payoutChanges.map(change => `
-                        <tr>
-                            <td>${change.section}</td>
-                            <td>${change.condition}</td>
-                            <td>${change.oldValue}</td>
-                            <td class="highlight">${change.newValue}</td>
-                            <td class="highlight">${change.change}</td>
-                        </tr>
-                    `).join('')}
-                </table>
-            ` : ''}
         `;
     }
 });
