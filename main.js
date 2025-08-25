@@ -6,55 +6,62 @@ async function extractTextFromPDF(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        // Each item.str is a text fragment; join with space, then add newline at end of page for best results
         fullText += content.items.map(item => item.str).join(" ") + "\n";
     }
     return fullText;
 }
 
-// Compare line by line and return only changed lines
-function compareContractsLineByLine(oldText, newText) {
-    // Split into lines and trim whitespace
-    const oldLines = oldText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const newLines = newText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+// Extract payout lines
+function extractPayoutLines(text) {
+    // This regex matches lines with Referral SharedId and payout amount
+    return text.match(/Customer Status.*?Referral SharedId.*?US\$[\d\.,]+ per order/g) || [];
+}
 
-    const maxLines = Math.max(oldLines.length, newLines.length);
+// Compare payout lines by Referral SharedId
+function comparePayoutLines(oldLines, newLines) {
+    // Build lookup by Referral SharedId for each contract
+    function getSharedId(line) {
+        const match = line.match(/Referral SharedId is (\d+)/);
+        return match ? match[1] : null;
+    }
     let changes = [];
+    const oldMap = Object.fromEntries(oldLines.map(l => [getSharedId(l), l]));
+    const newMap = Object.fromEntries(newLines.map(l => [getSharedId(l), l]));
 
-    for (let i = 0; i < maxLines; i++) {
-        const oldLine = oldLines[i] || '';
-        const newLine = newLines[i] || '';
+    // Compare by SharedId
+    Object.keys(newMap).forEach(sharedId => {
+        const oldLine = oldMap[sharedId] || "";
+        const newLine = newMap[sharedId];
         if (oldLine !== newLine) {
-            // Try to highlight the exact changed substring
-            let changeDescription = "";
-            // If both have a monetary value, highlight that difference
-            const oldAmount = oldLine.match(/US\$[0-9\.,]+/);
-            const newAmount = newLine.match(/US\$[0-9\.,]+/);
-            if (oldAmount && newAmount && oldAmount[0] !== newAmount[0]) {
-                changeDescription = `Amount changed from <b>${oldAmount[0]}</b> to <b>${newAmount[0]}</b>`;
+            // extract payout values
+            const oldVal = oldLine.match(/US\$[\d\.,]+/)?.[0] || "";
+            const newVal = newLine.match(/US\$[\d\.,]+/)?.[0] || "";
+            let changeText = "";
+            if (oldVal && newVal && oldVal !== newVal) {
+                changeText = `Payout changed from <b>${oldVal}</b> to <b>${newVal}</b>`;
             } else {
-                changeDescription = "Line changed";
+                changeText = "Line changed";
             }
             changes.push({
-                aspect: `Line ${i+1}`,
+                aspect: `SharedId ${sharedId}`,
                 oldValue: oldLine,
                 newValue: newLine,
-                change: changeDescription
+                change: changeText
             });
         }
-    }
+    });
     return changes;
 }
 
-// Display only changed lines in a table
-function displayLineByLineChanges(changes) {
+// Display payout changes
+function displayPayoutChanges(changes) {
     const resultsArea = document.getElementById('results');
     if (changes.length === 0) {
-        resultsArea.innerHTML = "<p>No differences found!</p>";
+        resultsArea.innerHTML = "<p>No payout differences found!</p>";
         return;
     }
     let html = `
-        <h3>Line-by-Line Changes</h3>
+        <h3>Payout Changes</h3>
         <table class="comparison-table">
             <tr>
                 <th>Aspect</th>
@@ -109,8 +116,11 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingProgress.style.width = '100%';
 
             setTimeout(() => {
-                const changes = compareContractsLineByLine(oldText, newText);
-                displayLineByLineChanges(changes);
+                // Extract payout lines
+                const oldLines = extractPayoutLines(oldText);
+                const newLines = extractPayoutLines(newText);
+                const changes = comparePayoutLines(oldLines, newLines);
+                displayPayoutChanges(changes);
                 loadingBar.style.display = 'none';
             }, 500);
 
