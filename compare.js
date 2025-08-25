@@ -33,11 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function compareContracts(oldText, newText) {
-        // --- STEP 1: Parse both contracts ---
         const oldData = parseContract(oldText);
         const newData = parseContract(newText);
 
-        // --- STEP 2: Compare payout groups by keys ---
         const payoutSections = ["Free Trial", "Online Sale"];
         const payoutChanges = [];
 
@@ -45,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const oldGroups = oldData[section + "_Groups"] || [];
             const newGroups = newData[section + "_Groups"] || [];
 
-            // Build a map from condition key to payout group for easy matching
             const groupKey = g =>
                 [
                     g["Customer Status"] || "",
@@ -58,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const oldMap = Object.fromEntries(oldGroups.map(g => [groupKey(g), g]));
             const newMap = Object.fromEntries(newGroups.map(g => [groupKey(g), g]));
 
-            // Find all unique keys
             const allKeys = new Set([...Object.keys(oldMap), ...Object.keys(newMap)]);
 
             allKeys.forEach(key => {
@@ -70,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (oldPayout !== newPayout) {
                     let payoutDiff = "";
-                    // Try to extract numbers for $ diff
                     const oldVal = extractValue(oldPayout);
                     const newVal = extractValue(newPayout);
                     if (oldVal !== null && newVal !== null && oldVal !== newVal) {
@@ -88,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // Basic Information (unchanged, but you can extend as needed)
         const aspects = [
             "Registration",
             "Action Locking",
@@ -105,16 +99,14 @@ document.addEventListener('DOMContentLoaded', () => {
             change: (oldData[aspect] || '') !== (newData[aspect] || '') ? "Changed" : "No change"
         }));
 
-        // Key Terms (optional; can be expanded for more fields)
         const keyTerms = [];
 
-        // Build summary
-        const summary = `Found ${payoutChanges.length} payout changes (matched by key conditions).`;
+        const summary = `Found <span class="highlight">${payoutChanges.length}</span> payout changes <span style="font-weight:normal;">(matched by key conditions).</span>`;
         const significantChanges = payoutChanges.map(
-            p => `${p.section}: ${p.condition}: ${p.oldValue} → ${p.newValue} ${p.change}`
+            p => `<span class="highlight">${p.section}</span>: <span>${p.condition}</span>: <span class="highlight">${p.oldValue} → ${p.newValue}</span> <span style="color:#22863a;">${p.change}</span>`
         );
 
-        const minorChanges = basicInformation.filter(i=>i.change==="Changed").map(i => `${i.aspect}: ${i.oldValue} → ${i.newValue}`);
+        const minorChanges = basicInformation.filter(i=>i.change==="Changed").map(i => `<span class="highlight">${i.aspect}</span>: <span>${i.oldValue}</span> → <span class="highlight">${i.newValue}</span>`);
 
         return {
             summary,
@@ -128,12 +120,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function extractValue(payoutStr) {
-        // Extract numeric dollar value from strings like "US$18.00 per order"
         const match = payoutStr.match(/US\$([\d,.]+)/);
         return match ? parseFloat(match[1].replace(/,/g, '')) : null;
     }
 
-    // Parses contract text into a JS object with major aspects and payout groups
     function parseContract(text) {
         const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
         const data = {};
@@ -144,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            // Find major sections
             if (line.startsWith("Free Trial:")) {
                 section = "Free Trial";
                 payoutGroups = [];
@@ -162,14 +151,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (line.startsWith("Credit Policy")) data["Credit Policy"] = line;
             if (line.startsWith("Referral Window")) data["Referral Window"] = line;
 
-            // Parse payout groups
             if (line === "Payout Groups") {
                 payoutGroups = [];
                 inPayoutGroups = true;
                 continue;
             }
             if (inPayoutGroups && (/^\d+$/.test(line) || line === "All Other")) {
-                // Save previous group if exists
                 if (Object.keys(currentGroup).length > 0) {
                     payoutGroups.push(currentGroup);
                     currentGroup = {};
@@ -187,7 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (/^US\$[\d,.]+/.test(line) || /^\d+%/.test(line) || line.includes('per order') || line.includes('sale amount')) {
                     currentGroup["Payout"] = line;
                 }
-                // End of a group: if next line is blank or next group starts
                 if (i+1 >= lines.length || /^\d+$/.test(lines[i+1]) || lines[i+1] === "All Other" || lines[i+1] === "Schedule") {
                     if (Object.keys(currentGroup).length > 0) {
                         payoutGroups.push(currentGroup);
@@ -195,21 +181,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-            // End of payout groups section
             if (inPayoutGroups && line === "Schedule") {
                 inPayoutGroups = false;
                 if (section && payoutGroups.length > 0) data[section + "_Groups"] = payoutGroups;
                 payoutGroups = [];
             }
         }
-        // Push last group if exists
         if (inPayoutGroups && Object.keys(currentGroup).length > 0) payoutGroups.push(currentGroup);
         if (section && payoutGroups.length > 0) data[section + "_Groups"] = payoutGroups;
 
         return data;
     }
 
-    // Renders results as HTML
     function displayResults(comparison) {
         resultsArea.innerHTML = `
             <h3>Summary of Changes</h3>
