@@ -1,4 +1,3 @@
-// Extract text from PDF using PDF.js
 async function extractTextFromPDF(file) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -11,49 +10,49 @@ async function extractTextFromPDF(file) {
     return fullText;
 }
 
-// Extract payout lines
+// Extract payout lines in the expected format
 function extractPayoutLines(text) {
-    // This regex matches lines with Referral SharedId and payout amount
-    return text.match(/Customer Status.*?Referral SharedId.*?US\$[\d\.,]+ per order/g) || [];
+    // Match lines with Customer Status, Referral SharedId, and payout
+    return text.match(/Customer Status.*?Referral SharedId is \d+ US\$[\d\.,]+ per order/g) || [];
 }
 
-// Compare payout lines by Referral SharedId
+// Compare payouts by SharedId and show changes only
 function comparePayoutLines(oldLines, newLines) {
-    // Build lookup by Referral SharedId for each contract
+    // Helper: extract SharedId from line
     function getSharedId(line) {
         const match = line.match(/Referral SharedId is (\d+)/);
         return match ? match[1] : null;
     }
-    let changes = [];
+    // Helper: extract payout value
+    function getPayout(line) {
+        const match = line.match(/US\$[\d\.,]+/);
+        return match ? match[0] : "";
+    }
+
+    // Build lookup by SharedId
     const oldMap = Object.fromEntries(oldLines.map(l => [getSharedId(l), l]));
     const newMap = Object.fromEntries(newLines.map(l => [getSharedId(l), l]));
 
-    // Compare by SharedId
+    let changes = [];
     Object.keys(newMap).forEach(sharedId => {
         const oldLine = oldMap[sharedId] || "";
         const newLine = newMap[sharedId];
-        if (oldLine !== newLine) {
-            // extract payout values
-            const oldVal = oldLine.match(/US\$[\d\.,]+/)?.[0] || "";
-            const newVal = newLine.match(/US\$[\d\.,]+/)?.[0] || "";
-            let changeText = "";
-            if (oldVal && newVal && oldVal !== newVal) {
-                changeText = `Payout changed from <b>${oldVal}</b> to <b>${newVal}</b>`;
-            } else {
-                changeText = "Line changed";
-            }
+        const oldPayout = getPayout(oldLine);
+        const newPayout = getPayout(newLine);
+
+        if (oldPayout !== newPayout) {
             changes.push({
-                aspect: `SharedId ${sharedId}`,
-                oldValue: oldLine,
-                newValue: newLine,
-                change: changeText
+                aspect: `Referral SharedId ${sharedId}`,
+                oldValue: oldPayout ? `${oldPayout}` : "(not present)",
+                newValue: newPayout ? `${newPayout}` : "(not present)",
+                change: `Payout changed from <b>${oldPayout || "(none)"}</b> to <b>${newPayout || "(none)"}</b>`
             });
         }
     });
     return changes;
 }
 
-// Display payout changes
+// Display payout changes in a concise table
 function displayPayoutChanges(changes) {
     const resultsArea = document.getElementById('results');
     if (changes.length === 0) {
@@ -65,8 +64,8 @@ function displayPayoutChanges(changes) {
         <table class="comparison-table">
             <tr>
                 <th>Aspect</th>
-                <th>Old Contract</th>
-                <th>New Contract</th>
+                <th>Old Payout</th>
+                <th>New Payout</th>
                 <th>Change</th>
             </tr>
             ${changes.map(row => `
@@ -116,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingProgress.style.width = '100%';
 
             setTimeout(() => {
-                // Extract payout lines
+                // Extract only payout lines
                 const oldLines = extractPayoutLines(oldText);
                 const newLines = extractPayoutLines(newText);
                 const changes = comparePayoutLines(oldLines, newLines);
