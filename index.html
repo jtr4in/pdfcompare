@@ -2,28 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Impact Radius Contract Comparator</title>
-    <link rel="stylesheet" href="style.css">
+    <title>PDF.js Global Test</title>
 </head>
 <body>
-    <h1>Impact Radius Contract Comparator</h1>
-    <div class="upload-section">
-        <label>
-            Contract 1 (PDF):
-            <input type="file" id="pdf1" accept="application/pdf">
-        </label>
-        <label>
-            Contract 2 (PDF):
-            <input type="file" id="pdf2" accept="application/pdf">
-        </label>
-        <button id="compareBtn">Compare</button>
-    </div>
-    <div id="result"></div>
-    <!-- PDF.js core library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <h1>Testing pdfjsLib Global</h1>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js" onload="window.pdfjsReady = true;"></script>
     <script>
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+      function checkPDFJS() {
+        // Wait for the script to actually load
+        if (window.pdfjsReady && typeof window.pdfjsLib !== "undefined") {
+          document.body.innerHTML += "<div id='test'>pdfjsLib is defined!</div>";
+        } else {
+          document.body.innerHTML += "<div id='test'>pdfjsLib is NOT defined!</div>";
+        }
+      }
+      window.onload = checkPDFJS;
     </script>
-    <script src="main.js"></script>
 </body>
 </html>
