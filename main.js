@@ -11,63 +11,136 @@ async function extractTextFromPDF(file) {
     return fullText;
 }
 
-// Parse contract text to extract key data (basic starter for your shown format)
-function parseContractData(text) {
-    const data = {};
-    // Simple regexes for sample fields
-    data.registration = (text.match(/Registration:\s*([A-Z$0-9\. ]+)/) || [])[1] || "";
-    data.defaultPayout = (text.match(/Default Payout\s*([A-Z$0-9\. ]+)/) || [])[1] || "";
-    data.actionLocking = (text.match(/Action Locking\s*([A-Za-z0-9 ,\(\)\.]+)/) || [])[1] || "";
-    data.invoicing = (text.match(/Invoicing\s*([A-Za-z0-9 ,\(\)\.]+)/) || [])[1] || "";
-    data.payoutScheduling = (text.match(/Payout Scheduling\s*([A-Za-z0-9 ,\(\)\.]+)/) || [])[1] || "";
-    data.creditPolicy = (text.match(/Credit Policy\s*([A-Za-z0-9 ,\(\)\.]+)/) || [])[1] || "";
-    data.referralWindow = (text.match(/Referral Window\s*([A-Za-z0-9 ,\(\)\.]+)/) || [])[1] || "";
+// Basic contract diff for demo purposes
+function compareText(oldText, newText) {
+    const linesOld = oldText.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
+    const linesNew = newText.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
 
-    // Payout Groups extraction (very basic, you may need to improve for your real data!)
-    const payoutGroupRegex = /Condition\s*Payout([\s\S]*?)(?:Free Trial|$)/;
-    const match = text.match(payoutGroupRegex);
-    data.payoutGroups = [];
-    if (match) {
-        const rows = match[1].split(/\d+\s+/).filter(Boolean);
-        rows.forEach(row => {
-            const condition = (row.match(/Customer Status is [\w ]+ Referral SharedId is \d+/) || [])[0] || "";
-            const payout = (row.match(/US\$[0-9\.]+ per order/) || [])[0] || "";
-            if (condition || payout) data.payoutGroups.push({ condition, payout });
+    let changes = [];
+    let changedCount = 0;
+
+    // Naive line-by-line comparison
+    for (let i = 0; i < Math.max(linesOld.length, linesNew.length); i++) {
+        const oldLine = linesOld[i] || '';
+        const newLine = linesNew[i] || '';
+        let changeType = 'No change';
+        if (oldLine !== newLine) {
+            changeType = 'Changed';
+            changedCount++;
+        }
+        changes.push({
+            aspect: `Line ${i+1}`,
+            oldValue: oldLine,
+            newValue: newLine,
+            change: changeType
         });
     }
-    return data;
+
+    // Summary
+    let summary = changedCount === 0
+        ? "No changes found."
+        : `${changedCount} lines changed.`;
+
+    return {
+        summary,
+        significantChanges: changes.filter(c => c.change === 'Changed').map(c => `Line ${c.aspect}: "${c.oldValue}" → "${c.newValue}"`),
+        minorChanges: [],
+        basicInformation: changes.slice(0, 10), // first 10 lines for demo
+        keyTerms: changes.slice(10, 20), // next 10 lines for demo
+        payoutChanges: [],
+        questions: changedCount > 0 ? ["Review all highlighted lines for contract impact."] : []
+    };
 }
 
-// Compare two contract data objects
-function compareContracts(data1, data2) {
-    let html = "<table class='diff-table'><tr><th>Field</th><th>Contract 1</th><th>Contract 2</th></tr>";
-    const fields = ["registration", "defaultPayout", "actionLocking", "invoicing", "payoutScheduling", "creditPolicy", "referralWindow"];
-    fields.forEach(field => {
-        const diffClass = (data1[field] !== data2[field]) ? "diff-different" : "";
-        html += `<tr class="${diffClass}"><td>${field.replace(/([A-Z])/g, ' $1')}</td><td>${data1[field]}</td><td>${data2[field]}</td></tr>`;
+document.addEventListener('DOMContentLoaded', () => {
+    const compareButton = document.getElementById('compareButton');
+    const resultsArea = document.getElementById('results');
+    const loadingBar = document.getElementById('loadingBar');
+    const loadingProgress = loadingBar.querySelector('.loading-progress');
+
+    compareButton.addEventListener('click', async () => {
+        const oldFile = document.getElementById('oldContract').files[0];
+        const newFile = document.getElementById('newContract').files[0];
+
+        if (!oldFile || !newFile) {
+            resultsArea.innerHTML = "<p>Please select both contracts to compare.</p>";
+            return;
+        }
+
+        // Show loading bar
+        loadingBar.style.display = 'block';
+        loadingProgress.style.width = '0%';
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += 1;
+            loadingProgress.style.width = `${Math.min(progress, 90)}%`;
+        }, 100);
+
+        try {
+            const [oldText, newText] = await Promise.all([
+                extractTextFromPDF(oldFile),
+                extractTextFromPDF(newFile)
+            ]);
+
+            clearInterval(progressInterval);
+            loadingProgress.style.width = '100%';
+
+            setTimeout(() => {
+                const comparison = compareText(oldText, newText);
+                displayResults(comparison);
+                loadingBar.style.display = 'none';
+            }, 500);
+
+        } catch (error) {
+            clearInterval(progressInterval);
+            loadingBar.style.display = 'none';
+            resultsArea.innerHTML = `
+                <p>An error occurred: ${error.message}</p>
+                <pre>${error.stack || ''}</pre>
+            `;
+        }
     });
-    // Payout Groups comparison (shows side-by-side)
-    html += `<tr><td>Payout Groups</td><td>${data1.payoutGroups.map(pg => pg.condition + ": " + pg.payout).join("<br>")}</td><td>${data2.payoutGroups.map(pg => pg.condition + ": " + pg.payout).join("<br>")}</td></tr>`;
-    html += "</table>";
-    return html;
-}
 
-// UI handlers
-document.getElementById('compareBtn').onclick = async function() {
-    const file1 = document.getElementById('pdf1').files[0];
-    const file2 = document.getElementById('pdf2').files[0];
-    if (!file1 || !file2) {
-        alert("Please choose two PDF files to compare.");
-        return;
+    function displayResults(comparison) {
+        resultsArea.innerHTML = `
+            <h3>Summary of Changes</h3>
+            <p>${comparison.summary}</p>
+            <h4>Significant Changes:</h4>
+            <ul>${comparison.significantChanges.map(change => `<li>${change}</li>`).join('')}</ul>
+            <h4>Minor Changes:</h4>
+            <ul>${comparison.minorChanges.map(change => `<li>${change}</li>`).join('')}</ul>
+            <h3>Basic Information Changes</h3>
+            <table class="comparison-table">
+                <tr>
+                    <th>Aspect</th><th>Old Contract</th><th>New Contract</th><th>Change</th>
+                </tr>
+                ${comparison.basicInformation.map(info => `
+                    <tr>
+                        <td>${info.aspect}</td>
+                        <td>${info.oldValue}</td>
+                        <td class="${info.oldValue !== info.newValue ? 'highlight' : ''}">${info.newValue}</td>
+                        <td>${info.change}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <h3>Key Terms Changes</h3>
+            <table class="comparison-table">
+                <tr>
+                    <th>Aspect</th><th>Old Contract</th><th>New Contract</th><th>Change</th>
+                </tr>
+                ${comparison.keyTerms.map(term => `
+                    <tr>
+                        <td>${term.aspect}</td>
+                        <td>${term.oldValue}</td>
+                        <td class="${term.oldValue !== term.newValue ? 'highlight' : ''}">${term.newValue}</td>
+                        <td>${term.change}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            ${comparison.questions.length > 0 ? `
+                <h3>Questions for Clarification</h3>
+                <ul>${comparison.questions.map(q => `<li>${q}</li>`).join('')}</ul>
+            ` : ''}
+        `;
     }
-    document.getElementById('result').innerHTML = "Extracting and comparing...";
-    try {
-        const [text1, text2] = await Promise.all([extractTextFromPDF(file1), extractTextFromPDF(file2)]);
-        const data1 = parseContractData(text1);
-        const data2 = parseContractData(text2);
-        const differences = compareContracts(data1, data2);
-        document.getElementById('result').innerHTML = differences;
-    } catch (err) {
-        document.getElementById('result').innerHTML = "Error: " + err;
-    }
-};
+});
