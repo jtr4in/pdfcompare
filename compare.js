@@ -218,31 +218,38 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
-    function displayResults(comparison) {
-        resultsArea.innerHTML = `
-            <h3>Summary of Changes</h3>
-            <p>${comparison.summary}</p>
-            <h4>Significant Changes:</h4>
-            ${renderSignificantChangesTable(comparison.significantChanges)}
-            <h4>Minor Changes:</h4>
-            <ul>
-                ${comparison.minorChanges.map(change => `<li>${change}</li>`).join('')}
-            </ul>
-            <h3>Basic Information Changes</h3>
-            <table class="comparison-table">
-                <tr>
-                    <th>Aspect</th>
-                    <th>Old Contract</th>
-                    <th>New Contract</th>
-                </tr>
-                ${comparison.basicInformation.map(info => `
+function displayResults(comparison) {
+    // Filter only aspects with changes
+    const changedBasics = comparison.basicInformation.filter(info => info.change === 'Changed');
+
+    resultsArea.innerHTML = `
+        <h3>Summary of Changes</h3>
+        <p>${comparison.summary}</p>
+        <h4>Significant Changes:</h4>
+        ${renderSignificantChangesTable(comparison.significantChanges)}
+        <h4>Minor Changes:</h4>
+        <ul>
+            ${comparison.minorChanges.map(change => `<li>${change}</li>`).join('')}
+        </ul>
+        <h3>Basic Information Changes</h3>
+        <table class="comparison-table">
+            <tr>
+                <th>Aspect</th>
+                <th>Old Contract</th>
+                <th>New Contract</th>
+            </tr>
+            ${
+                changedBasics.length === 0
+                ? `<tr><td colspan="3" style="text-align:center;color:#888;">No changes detected in basic information.</td></tr>`
+                : changedBasics.map(info => `
                     <tr>
                         <td>${info.aspect}</td>
                         <td>${info.oldValue}</td>
-                        <td class="${info.change === 'Changed' ? 'highlight' : ''}">${info.newValue}</td>
+                        <td class="highlight">${info.newValue}</td>
                     </tr>
-                `).join('')}
-            </table>
-        `;
-    }
+                `).join('')
+            }
+        </table>
+    `;
+}
 });
